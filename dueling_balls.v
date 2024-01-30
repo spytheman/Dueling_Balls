@@ -5,9 +5,10 @@ import gx
 import time
 import rand
 import math.vec
-import sokol.audio
+import miniaudio as ma
+import os
 
-const wtitle = 'Dueling Balls'
+const wtitle = 'Dueling Balls (miniaudio)'
 const wwidth = 640
 const wheight = 480
 const wcolor = gx.rgba(110, 110, 110, 255)
@@ -277,60 +278,40 @@ fn clamp[T](x T, a T, b T) T {
 @[heap]
 struct Player {
 mut:
-	samples  []f32
-	pos      int
-	finished bool
-	muted    bool
+	engine     &ma.Engine
+	bump_sound &ma.Sound
+	muted      bool
 }
 
 fn Player.new() &Player {
-	mut p := &Player{}
-	p.samples = []f32{len: 4 * 1024}
-	for idx in 0 .. p.samples.len / 2 {
-		p.samples[idx * 2] = 0.025 * f32(idx % 1024) / 1024.0
-		p.samples[idx * 2 + 1] = 0.025 * f32(idx % 1024) / 1024.0
+	engine := &ma.Engine{}
+	result := ma.engine_init(ma.null, engine)
+	if result != .success {
+		panic('Failed to initialize audio engine.')
 	}
-	audio.setup(
-		num_channels: 2
-		stream_userdata_cb: p.stream_callback
-		user_data: p
-	)
+	bump_sound_path := os.resource_abs_path('bump.wav')
+	bump_sound := &ma.Sound{}
+	if ma.sound_init_from_file(engine, bump_sound_path.str, 0, ma.null, ma.null, bump_sound) != .success {
+		panic('Failed to load sound ${bump_sound_path}.')
+	}
+	ma.sound_set_volume(bump_sound, 0.20)
+	mut p := &Player{
+		engine: engine
+		bump_sound: bump_sound
+	}
 	C.atexit(p.stop)
 	return p
 }
 
 fn (mut p Player) stop() {
-	audio.shutdown()
+	ma.sound_uninit(p.bump_sound)
+	ma.engine_uninit(p.engine)
 	p.muted = true
-	p.finished = false
-	p.pos = 0
-	p.samples.clear()
-}
-
-fn (mut p Player) stream_callback(buffer &f32, num_frames int, num_channels int, data voidptr) {
-	//	eprintln('> ${voidptr(buffer)} | num_frames: ${num_frames} | num_channels: ${num_channels} | p.finished: ${p.finished} | p.pos: ${p.pos} | p.samples.len: ${p.samples.len}')
-	if p.finished || p.muted {
-		nbytes := num_channels * num_frames * int(sizeof(f32))
-		unsafe { vmemset(buffer, 0, nbytes) }
-		return
-	}
-	ntotal := num_channels * num_frames
-	nremaining := p.samples.len - p.pos
-	nsamples := if nremaining < ntotal { nremaining } else { ntotal }
-	if nsamples <= 0 {
-		p.finished = true
-		return
-	}
-	unsafe { vmemcpy(buffer, &p.samples[p.pos], nsamples * int(sizeof(f32))) }
-	p.pos += nsamples
 }
 
 fn (mut p Player) bump() {
 	if !p.muted {
-		if p.finished {
-			p.pos = 0
-			p.finished = false
-		}
+		ma.sound_start(p.bump_sound)
 	}
 }
 
@@ -340,8 +321,8 @@ fn main() {
 		field: Field.new(fwidth, fheight, wwidth, wheight, neutral_field_color)
 		sound_player: Player.new()
 	}
-	// app.field.reset()
-	// app.reset_balls()
+	app.field.reset()
+	app.reset_balls()
 	app.gg = gg.new_context(
 		window_title: wtitle
 		bg_color: wcolor
