@@ -21,6 +21,7 @@ const color_palette = [gx.rgba(250, 0, 0, 55), gx.rgba(0, 0, 255, 55),
 	gx.rgba(0, 255, 0, 55), gx.rgba(255, 0, 0, 55), gx.rgba(155, 228, 255, 125)]
 
 const ball_1 = &Ball{
+	tag: 0
 	center: vec.vec2[f32](50, 50)
 	velocity: vec.vec2[f32](4, 1.2)
 	color: gx.rgba(255, 255, 255, 255)
@@ -28,6 +29,7 @@ const ball_1 = &Ball{
 	radius: 18
 }
 const ball_2 = &Ball{
+	tag: 1
 	center: vec.vec2[f32](520, 200)
 	velocity: vec.vec2[f32](3, 2.5)
 	color: gx.rgba(55, 55, 255, 255)
@@ -49,6 +51,7 @@ mut:
 
 struct Ball {
 mut:
+	tag      int
 	center   vec.Vec2[f32]
 	velocity vec.Vec2[f32]
 	radius   f32
@@ -130,6 +133,17 @@ fn (mut app App) frame() {
 	app.gg.end()
 }
 
+fn (mut app App) bounce_ball(mut b Ball) {
+	app.sound_player.play(b.tag)
+	b.velocity.multiply_scalar(-1.1)
+	if b.velocity.magnitude() > 5 {
+		b.velocity.x += rand.f32n(6.0) or { 0 } - 2.0
+		b.velocity.y += rand.f32n(6.0) or { 0 } - 2.0
+		b.velocity = b.velocity.unit()
+		b.velocity.multiply_scalar(5.0)
+	}
+}
+
 fn (mut app App) update() {
 	for {
 		// check for bounces between the balls:
@@ -137,13 +151,7 @@ fn (mut app App) update() {
 		mut b2 := unsafe { &app.balls[1] }
 		for b1.center.distance(b2.center) < b1.radius + b2.radius {
 			for mut b in app.balls {
-				b.velocity.multiply_scalar(-1.1)
-				if b.velocity.magnitude() > 5 {
-					b.velocity.x += rand.f32n(6.0) or { 0 } - 2.0
-					b.velocity.y += rand.f32n(6.0) or { 0 } - 2.0
-					b.velocity = b.velocity.unit()
-					b.velocity.multiply_scalar(5.0)
-				}
+				app.bounce_ball(mut *b) // TODO: v bug
 				b.center += b.velocity
 			}
 		}
@@ -156,15 +164,7 @@ fn (mut app App) update() {
 			unsafe {
 				*c = b.hitcolor
 			}
-			app.sound_player.bump()
-
-			b.velocity.multiply_scalar(-1.1)
-			if b.velocity.magnitude() > 5 {
-				b.velocity.x += rand.f32n(6.0) or { 0 } - 2.0
-				b.velocity.y += rand.f32n(6.0) or { 0 } - 2.0
-				b.velocity = b.velocity.unit()
-				b.velocity.multiply_scalar(5.0)
-			}
+			app.bounce_ball(mut *b) // TODO: v bug
 		}
 		// update the score for each ball
 		mut score1 := 0
@@ -188,12 +188,14 @@ fn (mut app App) update() {
 					b.velocity.x *= 3
 				}
 				b.velocity.x *= -1
+				app.sound_player.play(b.tag)
 			}
 			if b.center.y < b.radius || b.center.y > app.wheight - b.radius {
 				for b.velocity.magnitude_y() < 1 {
 					b.velocity.y *= 3
 				}
 				b.velocity.y *= -1
+				app.sound_player.play(b.tag)
 			}
 		}
 		// move the balls:
@@ -278,9 +280,9 @@ fn clamp[T](x T, a T, b T) T {
 @[heap]
 struct Player {
 mut:
-	engine     &ma.Engine
-	bump_sound &ma.Sound
-	muted      bool
+	engine &ma.Engine
+	sounds []&ma.Sound
+	muted  bool
 }
 
 fn Player.new() &Player {
@@ -289,29 +291,38 @@ fn Player.new() &Player {
 	if result != .success {
 		panic('Failed to initialize audio engine.')
 	}
-	bump_sound_path := os.resource_abs_path('bump.wav')
-	bump_sound := &ma.Sound{}
-	if ma.sound_init_from_file(engine, bump_sound_path.str, 0, ma.null, ma.null, bump_sound) != .success {
-		panic('Failed to load sound ${bump_sound_path}.')
-	}
-	ma.sound_set_volume(bump_sound, 0.20)
 	mut p := &Player{
 		engine: engine
-		bump_sound: bump_sound
 	}
 	C.atexit(p.stop)
+	for sname in ['ball1', 'ball2'] {
+		sound_path := os.resource_abs_path('${sname}.mp3')
+		sound := &ma.Sound{}
+		res := ma.sound_init_from_file(engine, sound_path.str, 0, ma.null, ma.null, sound)
+		if res != .success {
+			panic('Failed to load sound ${sound_path}, res: ${res}')
+		}
+		ma.sound_set_volume(sound, 0.20)
+		p.sounds << sound
+	}
 	return p
 }
 
 fn (mut p Player) stop() {
-	ma.sound_uninit(p.bump_sound)
+	for _, mut s in p.sounds {
+		ma.sound_uninit(s)
+	}
 	ma.engine_uninit(p.engine)
 	p.muted = true
 }
 
-fn (mut p Player) bump() {
+fn (mut p Player) play(tag int) {
 	if !p.muted {
-		ma.sound_start(p.bump_sound)
+		if tag >= 0 && tag < p.sounds.len {
+			ma.sound_start(unsafe { p.sounds[tag] })
+		} else {
+			eprintln('> unknown sound tag: ${tag}, p.sounds.len: ${p.sounds.len}')
+		}
 	}
 }
 
