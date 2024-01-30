@@ -10,5 +10,9 @@ To install it, just `v install` inside this project's folder.
 # Compilation/running:
 Do: `v run .` inside this repo, or if you want to just compile it: `v .`
 
+# Development:
+Run `v watch run .` in one shell, then just use your favourite editor to make changes, and save from time to time.
+The program would be recompiled and restarted automatically on each change/save.
+
 # Screenshot:
 ![Screenshot](https://github.com/spytheman/Dueling_Balls/blob/main/Screenshot_2024_01_30.png)
