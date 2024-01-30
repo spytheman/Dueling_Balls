@@ -7,3 +7,4 @@ First install [the latest version of the V programming language](https://github.
 
 Then, do: `v run .` inside this repo, or if you want to just compile it: `v .`
 
+![Screenshot](https://github.com/spytheman/Dueling_Balls/blob/main/Screenshot_2024_01_30.png)
