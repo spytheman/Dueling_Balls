@@ -294,7 +294,6 @@ fn Player.new() &Player {
 	mut p := &Player{
 		engine: engine
 	}
-	C.atexit(p.stop)
 	for sname in ['ball1', 'ball2'] {
 		sound_path := os.resource_abs_path('${sname}.mp3')
 		sound := &ma.Sound{}
@@ -309,11 +308,11 @@ fn Player.new() &Player {
 }
 
 fn (mut p Player) stop() {
-	for _, mut s in p.sounds {
-		ma.sound_uninit(s)
-	}
-	ma.engine_uninit(p.engine)
 	p.muted = true
+	for _, mut s in p.sounds {
+		ma.sound_stop(s)
+	}
+	ma.engine_stop(p.engine)
 }
 
 fn (mut p Player) play(tag int) {
@@ -347,4 +346,5 @@ fn main() {
 	)
 	spawn app.update()
 	app.gg.run()
+	app.sound_player.stop()
 }
