@@ -294,7 +294,7 @@ fn Player.new() &Player {
 	mut p := &Player{
 		engine: engine
 	}
-	for sname in ['ball1', 'ball2'] {
+	for sname in ['ball1', 'ball2', 'BeepBox-Song'] {
 		sound_path := os.resource_abs_path('${sname}.mp3')
 		sound := &ma.Sound{}
 		res := ma.sound_init_from_file(engine, sound_path.str, 0, ma.null, ma.null, sound)
@@ -304,6 +304,10 @@ fn Player.new() &Player {
 		ma.sound_set_volume(sound, 0.20)
 		p.sounds << sound
 	}
+	bmusic := unsafe { p.sounds[2] }
+	ma.sound_set_volume(bmusic, 0.50)
+	ma.sound_set_looping(bmusic, 1)
+	ma.sound_start(bmusic)
 	return p
 }
 
